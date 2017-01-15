@@ -1,5 +1,7 @@
 (ns if.systems)
 
+;; TODO Refactor these systems with a meta-macro. They are structurally similar.
+
 (defonce ^:private rooms (atom {}))
 
 (defn add-room
@@ -42,7 +44,7 @@
 
 (defn get-objects-in
   [room]
-  (filter #(= room (:location (second %))) @objects))
+  (conj {} (filter #(= room (:location (second %))) @objects)))
 
 (defonce ^:private flags (atom {}))
 
@@ -70,8 +72,10 @@
 
 (defn set-flag
   [state key value]
-  value)
+  (assoc-in state [:flags key] value))
 
 (defn flag?
   [state key]
-  false)
+  (if-not (nil? (get-in state [:flags key]))
+    (get-in state [:flags key])
+    (get @flags key)))

@@ -3,12 +3,18 @@
             [if.systems :as ifs]))
 
 (defonce ^:private cur-state (atom {:cur-pos :if.house/study
-                                :world {:if.house/study (ifs/get-room :if.house/study)}
-                                :objects (ifs/get-objects-in :if.house/study)}))
+                                    :world {:if.house/study (ifs/get-room :if.house/study)}
+                                    :objects (ifs/get-objects-in :if.house/study)
+                                    :flags {}}))
 
 (defn -main
   []
   (print cur-state))
+
+(defn load-room!
+  [room]
+  (swap! cur-state assoc-in [:world room] (ifs/get-room room))
+  (swap! cur-state update :objects merge (ifs/get-objects-in room)))
 
 (defn reload-room!
   [room]
@@ -40,26 +46,41 @@
   []
   (:description (current-room)))
 
+(defn do-scriptable-action
+  [key action & args]
+  (if-let [script (ifs/get-script key)]
+    (let [[res new-state string] (script @cur-state)]
+      (reset! cur-state new-state)
+      (if res
+        (str string " " (apply action args))
+        string))
+    (apply action args)))
+
 (defn acually-go
   [direction portal new-room]
     (do
       (swap! cur-state assoc :cur-pos new-room)
-      (str "You go " direction " through the " portal " to get to " new-room)))
+      (if-not (get-in [:world new-room] @cur-state)
+        (load-room! new-room))
+      (str "You go " (name direction) " through the " portal " to get to " (name new-room))))
 
 (defn go!
   [direction]
-  (let [res-string (if-let [exit (get (:exits (current-room)) direction)]
-                     (if-let [script (ifs/get-script [:go (:cur-pos @cur-state) direction])]
-                       (let [[res new-state string] (script @cur-state)]
-                         (reset! cur-state new-state)
-                         (if res
-                           (str string " " (acually-go direction (first exit) (second exit)))
-                           string))
-                       (acually-go direction (first exit) (second exit)))
-                     "You cannot go that way.")]
-    (if-not (get-in [:world (:cur-pos @cur-state)] @cur-state)
-      (reload-room! (:cur-pos @cur-state)))
-    res-string))
+  (if-let [[portal new-room] (get (:exits (current-room)) direction)]
+    (do-scriptable-action [:go (:cur-pos @cur-state) direction]
+                          acually-go
+                          direction portal new-room)
+    "You cannot go that way."))
+
+(defn get!
+  [object]
+  (if (= (:cur-pos @cur-state) (get-in @cur-state [:objects object :location]))
+    (swap! cur-state assoc-in [:objects object :location] :inventory)
+    "That isn't here."))
+
+(defn use!
+  [object target]
+  (do-scriptable-action [:use object target] #()))
 
 (defn warp-to!
   [room]

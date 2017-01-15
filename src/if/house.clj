@@ -34,6 +34,11 @@
   {:north ["arch" ::hallway]
    :south ["front door" ::outside]})
 
+(ifs/defobject ::key
+  "The Front Door Key"
+  "The key to the front door."
+  ::living-room)
+
 (ifs/defflag ::front-door-locked true)
 
 (ifs/defscript
@@ -42,6 +47,6 @@
 
 (ifs/defscript
   [:go ::living-room :south]
-  (if (ifs/flag? state ::front-door)
-    [true state "You go out the unlocked door."]
-    [false state "You can't go out because the door is locked."]))
+  (if (ifs/flag? state ::front-door-locked)
+    [false state "You can't go out because the door is locked."]
+    [true state "You go out the unlocked door."]))
