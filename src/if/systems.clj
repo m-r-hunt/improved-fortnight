@@ -1,61 +1,56 @@
+;; ## Systems that underlie the Engine.
+;;
+;; The general theme of this ns is that you have a defthing macro which registers
+;; thingies in the registry. These thingies will then be loaded when required by
+;; the game runtime. Re-evaluating the defthing form will update the registry
+;; but not the running game, until you ask the runtime to reload it. This means
+;; you can rewrite and eval code without messing up the state of a running game
+;; until you want the updated code to run.
+;;
 (ns if.systems)
 
-;; TODO Refactor these systems with a meta-macro. They are structurally similar.
+(defmacro system
+  [sys & args]
+  (let [registry (symbol (str (name sys) "s"))
+        add-sys! (symbol (str "add-" (name sys) "!"))
+        fn-args (interleave (map keyword args) args)]
+    `(do
+       (defonce ^:private ~registry (atom {}))
+       (defn ~add-sys!
+         [~'key ~'val]
+         (swap! ~registry assoc ~'key ~'val))
+       (defmacro ~(symbol (str "def" (name sys)))
+         [~'key ~@args]
+         `(~~add-sys! ~~'key ~(hash-map ~@fn-args)))
+       (defn ~(symbol (str "get-" (name sys)))
+         [~'key]
+         (get @~registry ~'key))
+       (defn ~(symbol (str "get-" (name sys) "s"))
+         []
+         @~registry))))
 
-(defonce ^:private rooms (atom {}))
+(system room pretty-name description exits)
 
-(defn add-room
-  [name room]
-  (swap! rooms assoc name room))
-
-(defmacro defroom
-  [name pretty-name description exits]
-  `(add-room ~name {:pretty-name ~pretty-name
-                    :description ~description
-                    :exits ~exits}))
-
-(defn get-room
-  [name]
-  (get @rooms name))
-
-(defn get-rooms
-  []
-  @rooms)
-
-(defonce ^:private objects (atom {}))
-
-(defn add-object
-  [name object]
-  (swap! objects assoc name object))
-
-(defmacro defobject
-  [name pretty-name description start-loc]
-  `(add-object ~name {:pretty-name ~pretty-name
-                      :description ~description
-                      :location ~start-loc}))
-
-(defn get-object
-  [object]
-  (get @objects object))
-
-(defn get-objects
-  []
-  @objects)
+(system object pretty-name description location)
 
 (defn get-objects-in
   [room]
   (conj {} (filter #(= room (:location (second %))) @objects)))
 
-(defonce ^:private flags (atom {}))
+(system flag default)
 
-(defn add-flag
-  [key default]
-  (swap! flags assoc key default))
+(defn set-flag
+  [state key value]
+  (assoc-in state [:flags key] value))
 
-(defmacro defflag
-  [key default]
-  `(add-flag ~key ~default))
+(defn flag?
+  [state key]
+  (if-not (nil? (get-in state [:flags key]))
+    (get-in state [:flags key])
+    (get-in @flags [key :default])))
 
+;; The scripts system requires different code due to the implicit function in
+;; the defscript macro. Thus, we write out the code by hand.
 (defonce ^:private scripts (atom {}))
 
 (defn add-script
@@ -69,13 +64,3 @@
 (defn get-script
   [key]
   (get @scripts key))
-
-(defn set-flag
-  [state key value]
-  (assoc-in state [:flags key] value))
-
-(defn flag?
-  [state key]
-  (if-not (nil? (get-in state [:flags key]))
-    (get-in state [:flags key])
-    (get @flags key)))

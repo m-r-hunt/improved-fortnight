@@ -42,9 +42,31 @@
   []
   (get-in @cur-state [:world (:cur-pos @cur-state)]))
 
+(defn current-objects
+  []
+  (filter #(= (get-in % [1 :location]) (:cur-pos @cur-state))
+          (:objects @cur-state)))
+
+(defn describe-objects
+  []
+  (apply str (interpose " " (map #(str "There is a " (get-in % [1 :pretty-name]) " here.")
+                           (current-objects)))))
+
+(defn describe-exits
+  []
+  (apply str (interpose " " (map #(str "There is a "
+                                 (first (second %))
+                                 " leading "
+                                 (name (first %))
+                                 ".")
+                           (get (current-room) :exits)))))
+
 (defn look
   []
-  (:description (current-room)))
+  (str (:pretty-name (current-room)) "\n"
+       (:description (current-room)) " "
+       (describe-objects) " "
+       (describe-exits)))
 
 (defn do-scriptable-action
   [key action & args]
@@ -62,7 +84,8 @@
       (swap! cur-state assoc :cur-pos new-room)
       (if-not (get-in [:world new-room] @cur-state)
         (load-room! new-room))
-      (str "You go " (name direction) " through the " portal " to get to " (name new-room))))
+      (str "You go " (name direction)
+           " through the " portal ".\n" (look))))
 
 (defn go!
   [direction]
